@@ -1,0 +1,197 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using System.Reflection;
+
+public class player_script : MonoBehaviour {
+    
+    public float moveSpeed = 5f;
+    
+    public Rigidbody2D rb;
+    public Animator animator;
+
+    Vector2 movement;
+
+    // dash vars
+    public float speed;
+    public bool dash_available;
+    public float dash_cooldown_timer = 0;
+    public float dash_cooldown;
+    public float dash_distance = 1;
+
+    // keybinding vars
+    bool paused = false;
+    public GameObject keybinding_menu;
+    public bool listening_for_new_key;
+    public Text key_text_selected;
+
+    // keys
+    public KeyCode up = KeyCode.W;
+    public KeyCode down = KeyCode.S;
+    public KeyCode left = KeyCode.A;
+    public KeyCode right = KeyCode.D;
+    public KeyCode alt_up = KeyCode.UpArrow;
+    public KeyCode alt_down = KeyCode.DownArrow;
+    public KeyCode alt_right = KeyCode.RightArrow;
+    public KeyCode alt_left = KeyCode.LeftArrow;
+    public KeyCode dash = KeyCode.LeftShift;
+    public KeyCode attack = KeyCode.Space;
+
+
+    void Update()
+    {
+        if (!paused)
+        {
+            //movement.x = Input.GetAxisRaw("Horizontal");
+            //movement.y = Input.GetAxisRaw("Vertical");
+
+            animator.SetFloat("Horizontal", movement.x);
+            animator.SetFloat("Vertical", movement.y);
+            animator.SetFloat("Magnitude", movement.sqrMagnitude);
+
+            
+        }
+        HandleKeys();
+        HandleCooldowns();
+    }
+
+
+    void FixedUpdate()
+    {
+        rb.MovePosition(rb.position + movement * moveSpeed * Time.fixedDeltaTime);
+    }
+
+    public void HandleKeys(){
+
+        if (listening_for_new_key)
+        {
+            SetNewKeybinding();
+        }
+
+        if (Input.GetMouseButtonDown(0))
+        {
+            if (paused)
+            {
+                Raycast_to_ui_elements();
+            }
+        }
+        if (Input.GetKeyDown(KeyCode.M))
+        {
+            keybinding_menu.SetActive(!keybinding_menu.activeSelf);
+            paused = !paused;
+        }
+
+        // movement keys
+        if (!paused)
+        {
+            if (Input.GetKey(up) || Input.GetKey(alt_up))
+            {
+                movement.y = 1;
+            }
+            else if (Input.GetKey(down) || Input.GetKey(alt_down))
+            {
+                movement.y = -1;
+            }
+            else
+            {
+                movement.y = 0;
+            }
+            if (Input.GetKey(right) || Input.GetKey(alt_right))
+            {
+                movement.x = 1;
+            }
+            else if (Input.GetKey(left) || Input.GetKey(alt_left))
+            {
+                movement.x = -1;
+            }
+            else
+            {
+                movement.x = 0;
+            }
+
+            // dash
+            // TODO MAKE MOVE_FORWARD() FUNCTION THAT DYNAMICALLY DOES THIS SO THAT ATTACKING CAN
+            // MAKE THE PLAYER DO A MINI DASH
+            if (Input.GetKey(dash))
+            {
+                if (dash_available)
+                {
+                    dash_available = false;
+
+                    // DASH TOWARDS MOUSE CODE
+                    /*
+                    Vector3 objectPos = Camera.main.WorldToScreenPoint(transform.position);
+                    Vector3 dir = Input.mousePosition - objectPos;
+                    transform.rotation = Quaternion.Euler(new Vector3(0, 0, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg));
+                    transform.Translate(transform.right);
+                    */
+                    transform.Translate(movement.x*dash_distance, movement.y*dash_distance, 0);
+                }
+            }
+        }
+    }
+
+    void HandleCooldowns()
+    {
+        if (!dash_available)
+        {
+            if (dash_cooldown_timer < dash_cooldown)
+            {
+                dash_cooldown_timer += Time.deltaTime;
+            }
+            else
+            {
+                dash_available = true;
+                dash_cooldown_timer = 0;
+            }
+        }
+    }
+
+    public void SetNewKeybinding()
+    {
+        foreach (KeyCode kcode in Enum.GetValues(typeof(KeyCode)))
+        {
+            if (Input.GetKeyDown(kcode))
+            {
+                key_text_selected.text = kcode.ToString();
+                key_text_selected.color = Color.black;
+                listening_for_new_key = false;
+                // this uses reflection to dynamically set keycode variables
+                // based on what the text element is named in the editor
+                // WARNING, CHANGING THE NAME OF THE TEXT ELEMENT BREAKS THIS CODE
+                GetType().GetField(key_text_selected.name).SetValue(this, kcode);
+            }
+        }
+    }
+
+    void Raycast_to_ui_elements()
+    {
+        GraphicRaycaster gr = FindObjectOfType<GraphicRaycaster>();
+        PointerEventData ped = new PointerEventData(null);
+        ped.position = Input.mousePosition;
+        List<RaycastResult> results = new List<RaycastResult>();
+        gr.Raycast(ped, results);
+        if (results[0].gameObject.tag == "re-keyable")
+        {
+            if (!listening_for_new_key)
+            {
+                if (results[0].gameObject != null)
+                {
+                    foreach (Text t in results[0].gameObject.transform.parent.GetComponentsInChildren<Text>())
+                    {
+                        t.color = Color.black;
+                    }
+                    listening_for_new_key = true;
+                    results[0].gameObject.GetComponent<Text>().color = Color.yellow;
+                    key_text_selected = results[0].gameObject.GetComponent<Text>();
+                }
+            }
+        }
+    }
+
+
+}
